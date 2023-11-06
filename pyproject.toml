@@ -5,9 +5,18 @@ description = "Reliable Parallel OpenAI API Request Processing with Rate Limitin
 authors = ["Matt Gibson"]
 license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/urbanophile/parareq"
+repository = "https://github.com/urbanophile/parareq"
+keywords = ["openai", "api", "async", "parallel", "rate-limiting"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+   "Framework :: aiohttp",
+  "Programming Language :: Python"
+]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.8"
 aiohttp = "^3.8.6"
 tiktoken = "^0.5.1"
 openai = "^1.1.0"

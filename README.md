@@ -10,7 +10,14 @@ $ pip install parareq
 
 ## Usage
 
-- TODO
+``` python
+from parareq.parareq import APIRequestProcessor
+APIRequestProcessor().run(...)
+```
+
+``` bash
+$ parareq  ...
+```
 
 ## Contributing
 
