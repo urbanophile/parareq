@@ -1,1 +1,0 @@
-from parareq import parareq
