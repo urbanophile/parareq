@@ -6,9 +6,9 @@
 
 # -- Project information -----------------------------------------------------
 
-project = u"parareq"
-copyright = u"2023, Matt Gibson"
-author = u"Matt Gibson"
+project = "parareq"
+copyright = "2023, Matt Gibson"
+author = "Matt Gibson"
 
 # -- General configuration ---------------------------------------------------
 
@@ -16,7 +16,8 @@ author = u"Matt Gibson"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    "myst_nb",
+    "myst_parser",
+    # "myst_nb",
     "autoapi.extension",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
