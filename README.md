@@ -17,8 +17,8 @@ $ pip install parareq
 
 or to install the dev version
 ```bash
-git clone 
-cd parareq https://github.com/urbanophile/parareq
+git clone https://github.com/urbanophile/parareq
+cd parareq 
 pip install -e .    
 ```
 
