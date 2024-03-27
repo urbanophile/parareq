@@ -9,16 +9,25 @@
 Reliable Parallel OpenAI API Request Processing with Rate Limiting. This is a basically a packaged version of the [code from the OpenAI Cookbook here](https://github.com/openai/openai-cookbook/blob/main/examples/api_request_parallel_processor.py).
 
 ## Installation
+To just use the library do
 
 ```bash
 $ pip install parareq
 ```
 
+or to install the dev version
+```bash
+git clone 
+cd parareq https://github.com/urbanophile/parareq
+pip install -e .    
+```
+
 ## Usage
 
 ``` python
-from parareq.parareq import APIRequestProcessor
-APIRequestProcessor().run(...)
+from parareq import APIRequestProcessor
+processor = APIRequestProcessor(api_key="xyz")
+processor.run("request.cfg")
 ```
 
 ``` bash

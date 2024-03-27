@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "parareq"
-version = "0.1.0"
+version = "0.1.1"
 description = "Reliable Parallel OpenAI API Request Processing with Rate Limiting"
 authors = ["Matt Gibson"]
 license = "MIT"
@@ -40,3 +40,6 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.semantic_release]
 version_variable = "pyproject.toml:version"
+
+[tool.poetry.scripts]
+parareq = "parareq.cli:cli"

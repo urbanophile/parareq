@@ -14,6 +14,7 @@ Features:
 - Retries failed requests up to {max_attempts} times, to avoid missing data
 - Logs errors, to diagnose problems with requests
 """
+
 import asyncio  # for running API calls concurrently
 import json  # for saving results to a jsonl file
 import logging  # for logging rate limit warnings and other messages
@@ -28,11 +29,14 @@ from dataclasses import (  # for storing API inputs, outputs, and metadata
 import aiohttp  # for making API calls concurrently
 
 from parareq.parareq_utils import (
-    api_endpoint_from_url,
+    openai_api_endpoint_from_url,
     append_to_jsonl,
-    num_tokens_consumed_from_request,
-    task_id_generator_function,
+    openai_num_tokens_consumed_from_request,
+    create_task_id_generator,
+    nonduplicate_filename,
 )
+
+# from parareq.rate_limiter import RateLimiter
 
 from typing import Optional  # for optional arguments
 
@@ -41,30 +45,47 @@ from typing import Optional  # for optional arguments
 # embedding    1500 req/min, 350k tokens/min
 
 
+class OpenAISettings:
+    pass
+
+
 class RateLimiter:
-    def __init__(self, rate, per):
-        self.rate = rate
-        self.per = per
-        self.allowance = rate
+    def __init__(self, limit: float, period: float):
+        """A manager for handling rate limits
 
-    def update_allowance(self, time_passed):
-        self.allowance += time_passed * (self.rate / self.per)
-        if self.allowance > self.rate:
-            self.allowance = self.rate  # throttle
+        Args:
+            rate (int): Maximum rate allowed of over the time period
+            per (int): The time in seconds over which the rate limit applies
+        """
+        self.limit = limit
+        self.period = period
 
-    def is_limited(self):
-        return self.allowance < 1.0
+        self.capacity = limit
+        self._last_update_time = time.time()
 
-    def update_usage(self):
-        self.allowance -= 1.0
+    def start_timer(self):
+        self.start_time = time.time()
+
+    def update_allowance(self):
+        update_time = time.time()
+        time_passed = update_time - self._last_update_time
+        self.capacity += time_passed * (self.limit / self.period)
+        if self.capacity > self.limit:
+            self.capacity = self.limit  # throttle
+
+    def has_limited(self, attempted_usage) -> bool:
+        return self.capacity > attempted_usage
+
+    def update_usage(self, usage):
+        self.capacity -= usage
 
 
-class TokenLimiter(RateLimiter):
-    def is_limited(self):
-        return super().is_limited()
+# class TokenLimiter(RateLimiter):
+#     def is_limited(self):
+#         return super().is_limited()
 
-    def update_usage(self):
-        super().update_usage()
+#     def update_usage(self):
+#         super().update_usage()
 
 
 @dataclass
@@ -214,19 +235,29 @@ class APIRequestProcessor:
             - 20 = INFO; will log when requests start and the status at finish
             - 10 = DEBUG; will log various things as the loop runs to see when they occur
             - if omitted, will default to 20 (INFO).
+
+        rate_limit_pause (int, optional): seconds to pause after rate limit error.
+            - Default is 15 seconds.
+
+        seconds_to_sleep_each_loop: Optional[float]: seconds to sleep each loop.
+            - Default is 1 ms which limits max throughput to 1,000 requests per second
     """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        save_filepath: Optional[str] = None,
-        request_url: Optional[str] = "https://api.openai.com/v1/embeddings",
-        max_requests_per_minute: Optional[float] = 3_500 * 0.75,
-        max_tokens_per_minute: Optional[float] = 90_000 * 0.75,
+        save_filepath: str = "parareq_results.jsonl",
+        which_api: Optional[str] = "openai",
+        request_url: str = "https://api.openai.com/v1/embeddings",
+        max_requests_per_minute: float = 3_500 * 0.75,
+        max_tokens_per_minute: float = 90_000 * 0.75,
         token_encoding_name: Optional[str] = "cl100k_base",
         max_attempts: Optional[int] = 5,
         logging_level: Optional[int] = 20,
+        rate_limit_pause: int = 15,
+        seconds_to_sleep_each_loop: float = 0.001,
     ) -> None:
+
         if api_key is None:
             self.api_key = os.environ["OPENAI_API_KEY"]
         else:
@@ -235,24 +266,28 @@ class APIRequestProcessor:
         self.save_filepath = save_filepath
 
         if Path(self.save_filepath).exists():
-            raise FileExistsError(
-                f"Results file {self.save_filepath} already exists. Please delete it or choose a different save_filepath."
-            )
+            self.save_filepath = nonduplicate_filename(self.save_filepath)
+            # raise FileExistsError(
+            #     f"Results file {self.save_filepath} already exists. Please delete it or choose a different save_filepath."
+            # )
+
         if not Path(self.save_filepath).parent.exists():
             Path(self.save_filepath).parent.mkdir(parents=True, exist_ok=True)
 
         self.request_url = request_url
-        self.max_requests_per_minute = max_requests_per_minute
-        self.max_tokens_per_minute = max_tokens_per_minute
+        # self.max_requests_per_minute = max_requests_per_minute
+        # self.max_tokens_per_minute = max_tokens_per_minute
+
+        self.request_limiter = RateLimiter(limit=max_requests_per_minute, period=60)
+        self.token_limiter = RateLimiter(limit=max_tokens_per_minute, period=60)
+
         self.token_encoding_name = token_encoding_name
         self.max_attempts = max_attempts
         self.logging_level = logging_level
 
         # constants
-        self.rate_limit_pause = 15  # seconds to pause after rate limit error
-        self.seconds_to_sleep_each_loop = (
-            0.001  # 1 ms limits max throughput to 1,000 requests per second
-        )
+        self.rate_limit_pause = rate_limit_pause
+        self.seconds_to_sleep_each_loop = seconds_to_sleep_each_loop
 
         # initialize logging
         logging.basicConfig(
@@ -262,13 +297,25 @@ class APIRequestProcessor:
         logging.debug(f"Logging initialized at level {self.logging_level}")
 
         # infer API endpoint and construct request header
-        self.api_endpoint = api_endpoint_from_url(self.request_url)
-        self.request_header = {"Authorization": f"Bearer {self.api_key}"}
+        if which_api == "openai":
+            self.api_endpoint = openai_api_endpoint_from_url(self.request_url)
+            self.request_header = {"Authorization": f"Bearer {self.api_key}"}
+            self.tokens_consumed = openai_num_tokens_consumed_from_request
+        elif which_api == "dummy":
+            self.api_endpoint = "dummy"
+            self.request_header = {"Content-Type": "application/json"}
+            self.tokens_consumed = lambda x, y, z: 0
+        elif which_api == "huggingface":
+            self.api_endpoint = "huggingface"
+            self.request_header = {"": ""}
+            self.tokens_consumed = lambda x, y, z: 0
+        else:
+            raise ValueError(f"API {which_api} not supported.")
 
-    def run(self, file) -> None:
+    def run(self, request_cfg: str) -> None:
         """Runs the script.
 
-        requests_file(str): a file containing the requests to be processed
+        requests_file(str): path to a file containing the requests to be processed
             - file should be a jsonl file, where each line is a json object with API parameters and an optional metadata field
             - e.g., {"model": "text-embedding-ada-002", "input": "embed me", "metadata": {"row_id": 1}}
             - as with all jsonl files, take care that newlines in the content are properly escaped (json.dumps does this automatically)
@@ -282,22 +329,20 @@ class APIRequestProcessor:
             - The loop pauses if a rate limit error is hit
             - The loop breaks when no tasks remain
         """
-        # initialize trackers
-        requests_retry_queue = asyncio.Queue()
 
         # generates integer IDs of 1, 2, 3, ...
-        task_id_generator = task_id_generator_function()
+        task_id_generator = create_task_id_generator()
 
         # single instance to track a collection of variables
         status_tracker = StatusTracker()
 
         # `requests` will provide requests one at a time
-        requests = file.__iter__()
-        logging.debug(f"File opened. Entering main loop")
+        with open(request_cfg, "r") as file:
+            requests = iter(file.readlines())
+        logging.debug(f"File:{request_cfg} opened. Entering main loop")
         asyncio.run(
             self._process_api_requests_from_file(
                 requests,
-                requests_retry_queue,
                 task_id_generator,
                 status_tracker,
             )
@@ -306,17 +351,18 @@ class APIRequestProcessor:
     async def _process_api_requests_from_file(
         self,
         requests,
-        requests_retry_queue,
         task_id_generator,
         status_tracker,
     ) -> None:
+
+        # initialize trackers
+        requests_retry_queue = asyncio.Queue()
+
         next_request = None  # variable to hold the next request to call
 
         # initialize available capacity counts
-        available_request_capacity = self.max_requests_per_minute
-        available_token_capacity = self.max_tokens_per_minute
-
-        last_update_time = time.time()
+        self.token_limiter.start_timer()
+        self.request_limiter.start_timer()
 
         # initialize flags
         file_not_finished = True  # after file is empty, we'll skip reading it
@@ -337,7 +383,7 @@ class APIRequestProcessor:
                         next_request = APIRequest(
                             task_id=next(task_id_generator),
                             request_json=request_json,
-                            token_consumption=num_tokens_consumed_from_request(
+                            token_consumption=self.tokens_consumed(
                                 request_json,
                                 self.api_endpoint,
                                 self.token_encoding_name,
@@ -354,31 +400,18 @@ class APIRequestProcessor:
                         logging.debug("Read file exhausted")
                         file_not_finished = False
 
-            # update available capacity
-            current_time = time.time()
-            seconds_since_update = current_time - last_update_time
-            available_request_capacity = min(
-                available_request_capacity
-                + self.max_requests_per_minute * seconds_since_update / 60.0,
-                self.max_requests_per_minute,
-            )
-            available_token_capacity = min(
-                available_token_capacity
-                + self.max_tokens_per_minute * seconds_since_update / 60.0,
-                self.max_tokens_per_minute,
-            )
-            last_update_time = current_time
-
+            self.request_limiter.update_allowance()
+            self.token_limiter.update_allowance()
             # if enough capacity available, call API
             if next_request:
                 next_request_tokens = next_request.token_consumption
                 if (
-                    available_request_capacity >= 1
-                    and available_token_capacity >= next_request_tokens
+                    self.request_limiter.capacity >= 1
+                    and self.token_limiter.capacity >= next_request_tokens
                 ):
                     # update counters
-                    available_request_capacity -= 1
-                    available_token_capacity -= next_request_tokens
+                    self.request_limiter.capacity -= 1
+                    self.token_limiter.capacity -= next_request_tokens
                     next_request.attempts_left -= 1
 
                     # call API

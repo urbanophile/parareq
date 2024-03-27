@@ -10,14 +10,17 @@
 import re  # for matching endpoint from request URL
 import json
 import tiktoken
+from pathlib import Path
 
 
-def api_endpoint_from_url(request_url):
+def openai_api_endpoint_from_url(request_url):
     """Extract the API endpoint from the request URL."""
-    try:
-        match = re.search("^https://[^/]+/v\\d+/(.+)$", request_url)
+
+    match = re.search("^https://[^/]+/v\\d+/(.+)$", request_url)
+    print(match.groups())
+    if match is not None and len(match.groups()) > 0:
         return match[1]
-    except TypeError:
+    else:
         raise ValueError(f"Invalid request URL: {request_url}")
 
 
@@ -28,7 +31,7 @@ def append_to_jsonl(data, filename: str) -> None:
         f.write(json_string + "\n")
 
 
-def num_tokens_consumed_from_request(
+def openai_num_tokens_consumed_from_request(
     request_json: dict,
     api_endpoint: str,
     token_encoding_name: str,
@@ -87,12 +90,26 @@ def num_tokens_consumed_from_request(
         )
 
 
-def task_id_generator_function():
+def create_task_id_generator():
     """Generate integers 0, 1, 2, and so on."""
     task_id = 0
     while True:
         yield task_id
         task_id += 1
+
+
+def nonduplicate_filename(file_path: str) -> str:
+    """Ensure that the file path is unique by adding a suffix if necessary."""
+    path = Path(file_path)
+    if not path.exists():
+        return file_path
+    else:
+        i = 1
+        while True:
+            new_path = path.with_name(f"{path.stem}_{i}{path.suffix}")
+            if not new_path.exists():
+                return str(new_path)
+            i += 1
 
 
 def create_requests_file():
