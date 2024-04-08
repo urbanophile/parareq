@@ -112,20 +112,23 @@ def nonduplicate_filename(file_path: str) -> str:
             i += 1
 
 
-def create_requests_file():
+def create_requests_file(
+    file_path: str = "examples/input/example_requests_to_parallel_process.jsonl",
+):
     """The example requests file at openai-cookbook/examples/data/example_requests_to_parallel_process.jsonl
     contains 10,000 requests to text-embedding-ada-002. It was generated with the following code:
 
     As with all jsonl files, take care that newlines in the content are properly escaped (json.dumps does this automatically).
     """
 
-    filename = "data/example_requests_to_parallel_process.jsonl"
     n_requests = 10_000
     jobs = [
         {"model": "text-embedding-ada-002", "input": str(x) + "\n"}
         for x in range(n_requests)
     ]
-    with open(filename, "w") as f:
+    # check
+
+    with open(file_path, "w") as f:
         for job in jobs:
             json_string = json.dumps(job)
             f.write(json_string + "\n")

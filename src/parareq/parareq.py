@@ -27,6 +27,7 @@ from dataclasses import (  # for storing API inputs, outputs, and metadata
     field,
 )
 import aiohttp  # for making API calls concurrently
+from typing import Optional  # for optional arguments
 
 from parareq.parareq_utils import (
     openai_api_endpoint_from_url,
@@ -38,7 +39,6 @@ from parareq.parareq_utils import (
 
 # from parareq.rate_limiter import RateLimiter
 
-from typing import Optional  # for optional arguments
 
 # alternative: os.getenv("OPENAI_API_KEY") but can't remember how to set env vars
 # chat         3500 req/min, 90k  tokens/min
@@ -78,14 +78,6 @@ class RateLimiter:
 
     def update_usage(self, usage):
         self.capacity -= usage
-
-
-# class TokenLimiter(RateLimiter):
-#     def is_limited(self):
-#         return super().is_limited()
-
-#     def update_usage(self):
-#         super().update_usage()
 
 
 @dataclass
@@ -247,7 +239,7 @@ class APIRequestProcessor:
         self,
         api_key: Optional[str] = None,
         save_filepath: str = "parareq_results.jsonl",
-        which_api: Optional[str] = "openai",
+        which_api: str = "openai",
         request_url: str = "https://api.openai.com/v1/embeddings",
         max_requests_per_minute: float = 3_500 * 0.75,
         max_tokens_per_minute: float = 90_000 * 0.75,
@@ -312,7 +304,7 @@ class APIRequestProcessor:
         else:
             raise ValueError(f"API {which_api} not supported.")
 
-    def run(self, request_cfg: str) -> None:
+    def run(self, requests_file: str) -> None:
         """Runs the script.
 
         requests_file(str): path to a file containing the requests to be processed
@@ -337,9 +329,11 @@ class APIRequestProcessor:
         status_tracker = StatusTracker()
 
         # `requests` will provide requests one at a time
-        with open(request_cfg, "r") as file:
+        print(requests_file)
+        with open(requests_file, "r") as file:
             requests = iter(file.readlines())
-        logging.debug(f"File:{request_cfg} opened. Entering main loop")
+
+        logging.debug(f"File:{requests_file} opened. Entering main loop")
         asyncio.run(
             self._process_api_requests_from_file(
                 requests,
@@ -380,6 +374,7 @@ class APIRequestProcessor:
                     try:
                         # get new request
                         request_json = json.loads(next(requests))
+                        print(request_json)
                         next_request = APIRequest(
                             task_id=next(task_id_generator),
                             request_json=request_json,

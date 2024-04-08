@@ -5,23 +5,52 @@
 [![PyPI][pypi-badge]][pypi-link]
 
 
-Reliable Parallel OpenAI API Request Processing with Rate Limiting. This is a basically a packaged version of the [code from the OpenAI Cookbook here](https://github.com/openai/openai-cookbook/blob/main/examples/api_request_parallel_processor.py).
+Reliable Parallel OpenAI API Request Processing with Rate Limiting. 
+
+Honestly, I don't recommend using this right now but please check back soon. 
+
+This is a basically a packaged version of the [code from the OpenAI Cookbook here](https://github.com/openai/openai-cookbook/blob/main/examples/api_request_parallel_processor.py).
 
 ## Installation
 
+To just use the library do
+
 ```bash
-$ pip install parareq
+pip install parareq
+```
+
+or to install the dev version
+
+``` bash
+git clone https://github.com/urbanophile/parareq
+cd parareq 
+pip install -e . 
 ```
 
 ## Usage
 
 ``` python
-from parareq.parareq import APIRequestProcessor
-APIRequestProcessor().run(...)
+from parareq import APIRequestProcessor
+processor = APIRequestProcessor(api_key="xyz")
+processor.run("request.cfg")
 ```
 
+You can also use parareq as a pure cli tool.
+
+e.g. huggingface 
 ``` bash
-$ parareq  ...
+parareq  --requests_filepath examples/input/huggingface_example.jsonl \
+         --save_filepath examples/data/huggingface_example_response.jsonl \
+         --which_api huggingface \
+         --request_url https://api-inference.huggingface.co/models/bert-base-uncased
+```
+or openai
+
+```
+python examples/api_request_parallel_processor.py \
+  --requests_filepath examples/data/example_requests_to_parallel_process.jsonl \
+  --save_filepath examples/data/example_requests_to_parallel_process_results.jsonl \
+  --request_url https://api.openai.com/v1/embeddings \
 ```
 
 ## Contributing
