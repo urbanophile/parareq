@@ -13,6 +13,7 @@ python examples/api_request_parallel_processor.py \
   --logging_level 20
 ```
 """
+
 import argparse
 import logging
 import os
@@ -27,7 +28,7 @@ def cli():
     # we use: api.openai.com/v1/chat/completions
     parser.add_argument("--request_url", default="https://api.openai.com/v1/embeddings")
     # alternative: os.getenv("OPENAI_API_KEY") but can't remember how to set env vars
-    parser.add_argument("--api_key", default=os.environ["OPENAI_API_KEY"])
+    parser.add_argument("--api_key", default="")
     # chat         3500 req/min, 90k  tokens/min
     # embedding    1500 req/min, 350k tokens/min
     parser.add_argument("--max_requests_per_minute", type=int, default=3_500 * 0.75)

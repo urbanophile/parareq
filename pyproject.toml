@@ -43,3 +43,9 @@ version_variable = "pyproject.toml:version"
 
 [tool.poetry.scripts]
 parareq = "parareq.cli:cli"
+
+[tool.poetry.scripts]
+parareq = "parareq.cli:cli"
+
+[tool.poetry.scripts]
+my_package_cli = 'parareq.parareq_cli:cli'
