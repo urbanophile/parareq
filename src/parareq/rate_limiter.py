@@ -2,18 +2,7 @@ import time
 from queue import Queue
 import random
 
-# import openai
-
-# import data classes
 from dataclasses import dataclass, field
-
-# class JobDispatcher:
-#     def __init__(openai_key, max_jobs=10):
-#         self.max_jobs = max_jobs
-#         openai.api_key = openai_key
-
-#     def run_job(self,args):
-#         openai.ChatCompletion.create(**args)
 
 
 @dataclass

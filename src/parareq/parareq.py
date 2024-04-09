@@ -29,7 +29,7 @@ from dataclasses import (  # for storing API inputs, outputs, and metadata
 import aiohttp  # for making API calls concurrently
 from typing import Optional  # for optional arguments
 
-from parareq.parareq_utils import (
+from parareq.utils import (
     openai_api_endpoint_from_url,
     append_to_jsonl,
     openai_num_tokens_consumed_from_request,
@@ -37,10 +37,6 @@ from parareq.parareq_utils import (
     nonduplicate_filename,
 )
 
-# from parareq.rate_limiter import RateLimiter
-
-
-# alternative: os.getenv("OPENAI_API_KEY") but can't remember how to set env vars
 # chat         3500 req/min, 90k  tokens/min
 # embedding    1500 req/min, 350k tokens/min
 
@@ -138,8 +134,9 @@ class APIRequest:
                 async with session.post(
                     url=request_url, headers=request_header, json=self.request_json
                 ) as response:
+                    print("before: ", response)
                     response = await response.json()
-                    print(response)
+                    print("after: ", response)
             if "error" in response:
                 logging.warning(
                     f"Request {self.task_id} failed with error {response['error']}"
@@ -288,6 +285,7 @@ class APIRequestProcessor:
         )
         logging.debug(f"Logging initialized at level {self.logging_level}")
 
+        print("API:", which_api)
         # infer API endpoint and construct request header
         if which_api == "openai":
             self.api_endpoint = openai_api_endpoint_from_url(self.request_url)
@@ -299,7 +297,7 @@ class APIRequestProcessor:
             self.tokens_consumed = lambda x, y, z: 0
         elif which_api == "huggingface":
             self.api_endpoint = "huggingface"
-            self.request_header = {"": ""}
+            self.request_header = {"Authorization": f"Bearer {self.api_key}"}
             self.tokens_consumed = lambda x, y, z: 0
         else:
             raise ValueError(f"API {which_api} not supported.")

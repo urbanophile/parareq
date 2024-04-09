@@ -17,9 +17,41 @@ python examples/api_request_parallel_processor.py \
 import argparse
 import logging
 import os
-import sys
 from parareq.parareq import APIRequestProcessor
-from parareq.parareq_utils import create_requests_file
+from parareq.utils import create_requests_file
+from dotenv import load_dotenv
+
+
+def look_for_api_key(args):
+    which_api = args.which_api
+    if which_api == "openai":
+        env_vars = ["OPENAI_API_KEY"]
+    elif which_api == "huggingface":
+        env_vars = ["HF_API_KEY"]
+    elif which_api is None:
+        env_vars = ["OPENAI_API_KEY", "HF_API_KEY"]
+    else:
+        raise ValueError(f"Unknown API {which_api}")
+
+    if args.api_key is None:
+        for var in env_vars:
+            try:
+                args.api_key = os.environ[var]
+                return
+            except KeyError:
+                print(f"No api key for environment variables {var}")
+        print(f"No api key in environment variables, trying .env file...")
+        load_dotenv()
+        for var in env_vars:
+            try:
+                args.api_key = os.environ[var]
+                return
+            except KeyError:
+                print(f"No api key for {var} in .env file.")
+
+        raise ValueError(
+            "API key must be provided via either cli arg, env var, or .env file"
+        )
 
 
 def cli():
@@ -28,10 +60,10 @@ def cli():
     parser.add_argument("--save_filepath", default=None)
     # we use: api.openai.com/v1/chat/completions
     parser.add_argument("--request_url", default="https://api.openai.com/v1/embeddings")
-    parser.add_argument("--which_api", default="openai")
-    # os.environ["OPENAI_API_KEY"] = "sk-..."
     # alternative: os.getenv("OPENAI_API_KEY") but can't remember how to set env vars
-    parser.add_argument("--api_key", default="")
+    parser.add_argument("--api_key", default=None)
+    parser.add_argument("--which_api", default="openai")
+
     # chat         3500 req/min, 90k  tokens/min
     # embedding    1500 req/min, 350k tokens/min
     parser.add_argument("--max_requests_per_minute", type=int, default=3_500 * 0.75)
@@ -40,30 +72,26 @@ def cli():
     parser.add_argument("--max_attempts", type=int, default=5)
     parser.add_argument("--logging_level", default=logging.INFO)
     parser.add_argument("--create_requests_file", type=bool, default=False)
+    parser.add_argument(
+        "--dry_run", type=bool, action=argparse.BooleanOptionalAction, default=False
+    )
 
     args = parser.parse_args()
 
     if args.save_filepath is None:
-        # args.save_filepath = args.requests_filepath.replace(".jsonl", "_results.jsonl")
-        args.save_filepath = "/dev/fd/1"
+        args.save_filepath = args.requests_filepath.replace(".jsonl", "_results.jsonl")
 
     if args.create_requests_file:
         create_requests_file()
         exit()
 
     requests_filepath = args.requests_filepath
-    if requests_filepath is None or not os.path.exists(requests_filepath):
-        # raise FileNotFoundError(f"Requests file {requests_filepath} not found")
-        print(f"requests_filepath: {requests_filepath}")
-        print("need to create requests file first, exiting...")
-        print(
-            "for an example run: python examples/api_request_parallel_processor.py --create_requests_file"
-        )
-        sys.exit(1)
+    if not os.path.exists(requests_filepath):
+        raise FileNotFoundError(f"Requests file {requests_filepath} not found")
 
-    # initialize file reading
+    look_for_api_key(args)
 
-    APIRequestProcessor(
+    processor = APIRequestProcessor(
         save_filepath=args.save_filepath,
         request_url=args.request_url,
         api_key=args.api_key,
@@ -73,7 +101,12 @@ def cli():
         token_encoding_name=args.token_encoding_name,
         max_attempts=int(args.max_attempts),
         logging_level=int(args.logging_level),
-    ).run(requests_file=requests_filepath)
+    )
+    if args.dry_run:
+        print("Dry run complete")
+        exit(0)
+    else:
+        processor.run(requests_filepath)
 
 
 if __name__ == "__main__":
