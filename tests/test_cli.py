@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import pytest
 
 
@@ -9,6 +10,8 @@ def test_cli_entrypoint_help():
 
 def test_cli_entrypoint_dry_run():
     # setup
+    # make sure folder exists
+    Path("tests/data").mkdir(parents=True, exist_ok=True)
     with open("tests/data/config_example.jsonl", "w") as f:
         f.write('{"input": "Hello, world!"}\n')
         f.write('{"input": ["Hello", "world!"]}\n')
