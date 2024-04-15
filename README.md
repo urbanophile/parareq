@@ -22,6 +22,7 @@ This is a basically a packaged version of the [code from the OpenAI Cookbook her
 
 The package is published on PyPI and can be installed by running:
 
+
 ```bash
 pip install parareq
 ```
@@ -99,7 +100,7 @@ Interested in contributing? Check out the contributing guidelines. Please note t
 
 `parareq` was created with [`cookiecutter`](https://cookiecutter.readthedocs.io/en/latest/) and the `py-pkgs-cookiecutter` [template](https://github.com/py-pkgs/py-pkgs-cookiecutter).
 
-[github-ci]: https://github.com/urbanophile/parareq/workflows/ci/badge.svg?branch=main
+[github-ci]: https://github.com/urbanophile/parareq/actions/workflows/ci.yml/badge.svg?branch=main
 [github-link]: https://github.com/urbanophile/parareq
 [pypi-badge]: https://img.shields.io/pypi/v/parareq.svg
 [pypi-link]: https://pypi.org/project/parareq/
