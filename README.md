@@ -5,6 +5,7 @@
 [![PyPI][pypi-badge]][pypi-link]
 
 
+
 Reliable Parallel API Request Processing with Rate Limiting. Useful for 
 - doing lots of HTTP API requests while respecting rate limits.
 - simple CLI jobs 
@@ -19,7 +20,7 @@ This is a basically a packaged version of the [code from the OpenAI Cookbook her
 
 ## Installation
 
-To just use the library do
+The package is published on PyPI and can be installed by running:
 
 ```bash
 pip install parareq
@@ -46,11 +47,11 @@ You have three options to set up your environment variable for the OpenAI API ke
 - Another option is to 
     1. create a copy of the `.env.template` file and name it `.env`. 
     2. Then, you can add your OpenAI API key in the `.env` file.
-- finally, you can provide as a cli argument e.g. `parareq --api_key "XYZABCEFG`
+- finally, you can provide as a cli argument e.g. `parareq --api_key "XYZABCEFG"`
 
 ### Run OpenAI calls
 
-having setup 
+Having set your API key in an accessible place, now just run:
 ```
 parareq     \ 
          --requests_filepath examples/input/salt_survey_example.jsonl \
@@ -83,6 +84,8 @@ processor.run("request.cfg")
 ```
 
 
+## 
+
 
 ## Contributing
 
@@ -96,7 +99,7 @@ Interested in contributing? Check out the contributing guidelines. Please note t
 
 `parareq` was created with [`cookiecutter`](https://cookiecutter.readthedocs.io/en/latest/) and the `py-pkgs-cookiecutter` [template](https://github.com/py-pkgs/py-pkgs-cookiecutter).
 
-[github-ci]: https://github.com/urbanophile/parareq/workflows/ci/badge.svg?branch=master
+[github-ci]: https://github.com/urbanophile/parareq/workflows/ci/badge.svg?branch=main
 [github-link]: https://github.com/urbanophile/parareq
 [pypi-badge]: https://img.shields.io/pypi/v/parareq.svg
 [pypi-link]: https://pypi.org/project/parareq/

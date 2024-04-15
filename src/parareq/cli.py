@@ -1,17 +1,19 @@
-"""
+""" Command line interface for APIRequestProcessor.
 
 Example command to call script:
+
+```python
+    python examples/api_request_parallel_processor.py \
+    --requests_filepath examples/data/example_requests_to_parallel_process.jsonl \
+    --save_filepath examples/data/example_requests_to_parallel_process_results.jsonl \
+    --request_url https://api.openai.com/v1/embeddings \
+    --max_requests_per_minute 1500 \
+    --max_tokens_per_minute 6250000 \
+    --token_encoding_name cl100k_base \
+    --max_attempts 5 \
+    --logging_level 20
 ```
-python examples/api_request_parallel_processor.py \
-  --requests_filepath examples/data/example_requests_to_parallel_process.jsonl \
-  --save_filepath examples/data/example_requests_to_parallel_process_results.jsonl \
-  --request_url https://api.openai.com/v1/embeddings \
-  --max_requests_per_minute 1500 \
-  --max_tokens_per_minute 6250000 \
-  --token_encoding_name cl100k_base \
-  --max_attempts 5 \
-  --logging_level 20
-```
+
 """
 
 import argparse
@@ -23,6 +25,7 @@ from dotenv import load_dotenv
 
 
 def look_for_api_key(args):
+    """Try to find api key in environment variables or .env file."""
     which_api = args.which_api
     if which_api == "openai":
         env_vars = ["OPENAI_API_KEY"]
@@ -55,6 +58,7 @@ def look_for_api_key(args):
 
 
 def cli():
+    """Handles the CLI UI"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--requests_filepath")
     parser.add_argument("--save_filepath", default=None)

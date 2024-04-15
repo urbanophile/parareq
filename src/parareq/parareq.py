@@ -1,18 +1,19 @@
-""" API REQUEST PARALLEL PROCESSOR
+""" Core module implementing the queue, rate limiter and job manager classes.
 
-Using the OpenAI API to process lots of text quickly takes some care.
-If you trickle in a million API requests one by one, they'll take days to complete.
-If you flood a million API requests in parallel, they'll exceed the rate limits and fail with errors.
+Using an API to process lots of text quickly takes some care.
+    - If you trickle in a million API requests one by one, they'll take days to complete.
+    - If you flood a million API requests in parallel, they'll exceed the rate limits and fail with errors.
+
 To maximize throughput, parallel requests need to be throttled to stay under rate limits.
 
-This script parallelizes requests to the OpenAI API while throttling to stay under rate limits.
+This script parallelizes requests to an API (currently huggingface or openai) while throttling to stay under rate limits.
 
 Features:
-- Streams requests from file, to avoid running out of memory for giant jobs
-- Makes requests concurrently, to maximize throughput
-- Throttles request and token usage, to stay under rate limits
-- Retries failed requests up to {max_attempts} times, to avoid missing data
-- Logs errors, to diagnose problems with requests
+    - Streams requests from file, to avoid running out of memory for giant jobs
+    - Makes requests concurrently, to maximize throughput
+    - Throttles request and token usage, to stay under rate limits
+    - Retries failed requests up to {max_attempts} times, to avoid missing data
+    - Logs errors, to diagnose problems with requests
 """
 
 import asyncio  # for running API calls concurrently
@@ -42,17 +43,21 @@ from parareq.utils import (
 
 
 class OpenAISettings:
+    """Stores config for OpenAI API"""
+
     pass
 
 
 class RateLimiter:
-    def __init__(self, limit: float, period: float):
-        """A manager for handling rate limits
+    """Implements a token bucket for handling rate limits
 
-        Args:
-            rate (int): Maximum rate allowed of over the time period
-            per (int): The time in seconds over which the rate limit applies
-        """
+    Args:
+            limit (int): Maximum rate allowed of over the time period
+            period (int): The time in seconds over which the rate limit applies
+    """
+
+    def __init__(self, limit: float, period: float):
+
         self.limit = limit
         self.period = period
 
@@ -303,7 +308,7 @@ class APIRequestProcessor:
             raise ValueError(f"API {which_api} not supported.")
 
     def run(self, requests_file: str) -> None:
-        """Runs the script.
+        """Runs the script. Wraps the async code.
 
         requests_file(str): path to a file containing the requests to be processed
             - file should be a jsonl file, where each line is a json object with API parameters and an optional metadata field
@@ -346,6 +351,7 @@ class APIRequestProcessor:
         task_id_generator,
         status_tracker,
     ) -> None:
+        """Main async loop to process API requests"""
 
         # initialize trackers
         requests_retry_queue = asyncio.Queue()

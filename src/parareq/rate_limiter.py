@@ -1,3 +1,5 @@
+"""Beginning of refactor of rate limiter to be more generic and reusable."""
+
 import time
 from queue import Queue
 import random
