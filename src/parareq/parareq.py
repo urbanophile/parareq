@@ -31,54 +31,31 @@ import aiohttp  # for making API calls concurrently
 from typing import Optional  # for optional arguments
 
 from parareq.utils import (
-    openai_api_endpoint_from_url,
-    append_to_jsonl,
-    openai_num_tokens_consumed_from_request,
     create_task_id_generator,
     nonduplicate_filename,
+    append_to_jsonl,
 )
+from parareq.openai_utils import (
+    openai_api_endpoint_from_url,
+    openai_num_tokens_consumed_from_request,
+)
+from parareq.rate_limiter import RateLimiter
 
-# chat         3500 req/min, 90k  tokens/min
-# embedding    1500 req/min, 350k tokens/min
 
-
+@dataclass
 class OpenAISettings:
-    """Stores config for OpenAI API"""
+    """Stores config for OpenAI API
 
-    pass
-
-
-class RateLimiter:
-    """Implements a token bucket for handling rate limits
-
-    Args:
-            limit (int): Maximum rate allowed of over the time period
-            period (int): The time in seconds over which the rate limit applies
+    Last update: 2023-??-??
     """
 
-    def __init__(self, limit: float, period: float):
-
-        self.limit = limit
-        self.period = period
-
-        self.capacity = limit
-        self._last_update_time = time.time()
-
-    def start_timer(self):
-        self.start_time = time.time()
-
-    def update_allowance(self):
-        update_time = time.time()
-        time_passed = update_time - self._last_update_time
-        self.capacity += time_passed * (self.limit / self.period)
-        if self.capacity > self.limit:
-            self.capacity = self.limit  # throttle
-
-    def has_limited(self, attempted_usage) -> bool:
-        return self.capacity > attempted_usage
-
-    def update_usage(self, usage):
-        self.capacity -= usage
+    api_routes: list = field(default_factory=lambda: ["chat", "embedding"])
+    chat_request_rate: int = 3500
+    chat_tokens_rate: int = 90_000
+    chat_secs_in_rate_period: int = 60
+    embedding_request_rate: int = 1500
+    embedding_tokens_rate: int = 350_000
+    embedding_secs_in_rate_period: int = 60
 
 
 @dataclass
@@ -95,7 +72,7 @@ class StatusTracker:
     num_other_errors: int = 0
 
     # used to cool off after hitting rate limits
-    time_of_last_rate_limit_error: float = 0
+    last_rate_error_time: float = 0
 
     def task_started(self):
         self.num_tasks_started += 1
@@ -108,6 +85,13 @@ class StatusTracker:
     def task_failed(self):
         self.num_tasks_failed += 1
         self.num_tasks_in_progress -= 1
+
+    def had_rate_limit_error(self):
+        self.last_rate_error_time = time.time()
+        self.num_rate_limit_errors += 1
+
+    def had_api_error(self):
+        self.num_api_errors += 1
 
 
 @dataclass
@@ -130,7 +114,7 @@ class APIRequest:
         save_filepath: str,
         status_tracker: StatusTracker,
     ):
-        """Calls the OpenAI API and saves results."""
+        """Does the async HTTP POST request to API and saves results."""
         logging.info(f"Starting request #{self.task_id}")
         logging.debug(f"metadata: {self.metadata}")
         error = None
@@ -149,24 +133,23 @@ class APIRequest:
 
                 error = response
                 if "Rate limit" in response["error"].get("message", ""):
-                    status_tracker.time_of_last_rate_limit_error = time.time()
-                    status_tracker.num_rate_limit_errors += 1
+                    status_tracker.had_rate_limit_error()
                 else:
-                    status_tracker.num_api_errors += 1
+                    status_tracker.had_api_error()
 
-        except (
-            ValueError
-        ) as e:  # catching naked exceptions is bad practice, but in this case we'll log & save them
+        except ValueError as e:  # catching naked exceptions is bad practice
             logging.warning(f"Request {self.task_id} failed with Exception {e}")
             status_tracker.num_other_errors += 1
             error = e
-        # if you encounter an error which could not be processed save
+
+        # if you encounter an error which could not be processed, then save
         if error:
             await self._failure(error, status_tracker, save_filepath, retry_queue)
         else:
             await self._success(response, status_tracker, save_filepath)
 
     async def _failure(self, error, status_tracker, save_filepath, retry_queue):
+        """Handles a failed request. Retries if attempts remain, otherwise logs error."""
         self.result.append(error)
         if self.attempts_left:
             retry_queue.put_nowait(self)
@@ -183,6 +166,7 @@ class APIRequest:
             status_tracker.task_failed()
 
     async def _success(self, response, status_tracker, save_filepath):
+        """Handles a successful request. Saves results to file."""
         data = [self.request_json, response]
         data.append(self.metadata) if self.metadata else ""
 
@@ -249,7 +233,7 @@ class APIRequestProcessor:
         max_attempts: Optional[int] = 5,
         logging_level: Optional[int] = 20,
         rate_limit_pause: int = 15,
-        seconds_to_sleep_each_loop: float = 0.001,
+        loop_sleep_seconds: float = 0.001,
     ) -> None:
 
         if api_key is None:
@@ -261,16 +245,11 @@ class APIRequestProcessor:
 
         if Path(self.save_filepath).exists():
             self.save_filepath = nonduplicate_filename(self.save_filepath)
-            # raise FileExistsError(
-            #     f"Results file {self.save_filepath} already exists. Please delete it or choose a different save_filepath."
-            # )
 
         if not Path(self.save_filepath).parent.exists():
             Path(self.save_filepath).parent.mkdir(parents=True, exist_ok=True)
 
         self.request_url = request_url
-        # self.max_requests_per_minute = max_requests_per_minute
-        # self.max_tokens_per_minute = max_tokens_per_minute
 
         self.request_limiter = RateLimiter(limit=max_requests_per_minute, period=60)
         self.token_limiter = RateLimiter(limit=max_tokens_per_minute, period=60)
@@ -281,7 +260,7 @@ class APIRequestProcessor:
 
         # constants
         self.rate_limit_pause = rate_limit_pause
-        self.seconds_to_sleep_each_loop = seconds_to_sleep_each_loop
+        self.loop_sleep_seconds = loop_sleep_seconds
 
         # initialize logging
         logging.basicConfig(
@@ -405,12 +384,12 @@ class APIRequestProcessor:
             if next_request:
                 next_request_tokens = next_request.token_consumption
                 if (
-                    self.request_limiter.capacity >= 1
-                    and self.token_limiter.capacity >= next_request_tokens
+                    self.request_limiter.current_capacity >= 1
+                    and self.token_limiter.current_capacity >= next_request_tokens
                 ):
                     # update counters
-                    self.request_limiter.capacity -= 1
-                    self.token_limiter.capacity -= next_request_tokens
+                    self.request_limiter.current_capacity -= 1
+                    self.token_limiter.current_capacity -= next_request_tokens
                     next_request.attempts_left -= 1
 
                     # call API
@@ -430,7 +409,7 @@ class APIRequestProcessor:
                 break
 
             # main loop sleeps briefly so concurrent tasks can run
-            await asyncio.sleep(self.seconds_to_sleep_each_loop)
+            await asyncio.sleep(self.loop_sleep_seconds)
 
             await self._rate_limit_cooldown(status_tracker)
 
@@ -438,23 +417,19 @@ class APIRequestProcessor:
 
     async def _rate_limit_cooldown(self, status_tracker: StatusTracker):
         # if a rate limit error was hit recently, pause to cool down
-        seconds_since_rate_limit_error = (
-            time.time() - status_tracker.time_of_last_rate_limit_error
-        )
-        if seconds_since_rate_limit_error < self.rate_limit_pause:
-            remaining_seconds_to_pause = (
-                self.rate_limit_pause - seconds_since_rate_limit_error
-            )
-            await asyncio.sleep(remaining_seconds_to_pause)
+        seconds_since_error = time.time() - status_tracker.last_rate_error_time
+        if seconds_since_error < self.rate_limit_pause:
+            time_until_resume = self.rate_limit_pause - seconds_since_error
+            await asyncio.sleep(time_until_resume)
             # ^e.g., if pause is 15 seconds and final limit was hit 5 seconds ago
             logging.warn(
-                f"Pausing to cool down until {time.ctime(status_tracker.time_of_last_rate_limit_error + self.rate_limit_pause)}"
+                f"Pausing to cool down until {time.ctime(status_tracker.last_rate_error_time + self.rate_limit_pause)}"
             )
 
     async def _after_finishing(self, status_tracker: StatusTracker):
         # after finishing, log final status
         logging.info(
-            f"""Parallel processing complete. Results saved to {self.save_filepath}"""
+            f"Parallel processing complete. Result saved to: {self.save_filepath}"
         )
         if status_tracker.num_tasks_failed > 0:
             logging.warning(
