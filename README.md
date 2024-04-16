@@ -35,70 +35,63 @@ cd parareq
 pip install -e . 
 ```
 
-## OpenAI Usage
+## OpenAI usage
 
-We default to using openai, you need to setup your API key
-
-### Setup API Key
-
-You have three options to set up your environment variable for the OpenAI API key:
-
-- One option is to export the environment variable every time you open the terminal. You can add the export command to your .bashrc file to avoid this.
-    - `export OPENAI_API_KEY=[add your api key here]`
-- Another option is to 
-    1. create a copy of the `.env.template` file and name it `.env`. 
-    2. Then, you can add your OpenAI API key in the `.env` file.
-- finally, you can provide as a cli argument e.g. `parareq --api_key "XYZABCEFG"`
-
-### Run OpenAI calls
-
-Having set your API key in an accessible place, now just run:
+Now run
 ```
+OPENAI_API_KEY="abcdzyz1234"
 parareq     \ 
          --requests_filepath examples/input/salt_survey_example.jsonl \
          --save_filepath output/response_salt_survey_example.jsonl \
          --request_url https://api.openai.com/v1/chat/completions
 ```
 
+## TODO 
+- github actions 
+    - [X] run test suite against python 3.9-3.12
+    - [ ] run test suite against ubuntu 22.04, ubuntu 20.04,
+    - [ ] run against latest_macos 
+- testing  
+    - [ ] write tests for token bucket implementation (NEXT)
+    - [ ] write longer functional test for openai api (NEXT)
+    - [ ] write test for custom api (NEXT)
+        - [ ] fix flask dummy api 
+    - [ ] 100% coverage for parareq.parareq (NEXT)
+- features:
+    - [ ] publish 0.1.1 to pypi (NEXT)
+    - [ ] allow custom actions on api call completion
+        - [ ] write example workflow for "generating knowledge prompting" (2-step)
+        - [ ] write example workflow for "prompt chaining" (2-step)
+        - [ ] write example workflow for self-consistency (n-step)
+        - [ ] write example workflow for summarisation (n-step)
+    - [ ] custom api 
+    - [ ] some sort of better persistence 
+- refactor and troubleshooting
+    - [ ] debug huggingface api calls (NEXT)
+    - [ ] allow api calls to be somethign other than post requests
+    - [ ] move rate limiting logic into rate_limiter
+- docs
+    - [ ] decide on plan 
+    - [ ] medium article howto
 
+- release 0.1.2:
+    - functional tests for openai
+    - 100% coverage for parareq.parareq
+    - ubuntu testing 
 
-## HuggingFace usage
-You need to set the enviromental variable 
-To use huggingface is then just do: 
+- release 0.2:
+    - hugging face integration
+    - custom api integration
+    - run tests against macos 
 
-``` bash
-parareq  --requests_filepath examples/input/huggingface_example.jsonl \
-         --save_filepath examples/data/huggingface_example_response.jsonl \
-         --which_api huggingface \
-         --request_url https://api-inference.huggingface.co/models/bert-base-uncased
-```
+- release 0.3: 
+    - multistep workflows
 
-
-
-## API usage 
-
-This not particularly stable tbh, but you can get start as follow below:
-``` python
-from parareq import APIRequestProcessor
-processor = APIRequestProcessor(api_key="xyz")
-processor.run("request.cfg")
-```
-
-
-## 
-
-
-## Contributing
-
-Interested in contributing? Check out the contributing guidelines. Please note that this project is released with a Code of Conduct. By contributing to this project, you agree to abide by its terms.
 
 ## License
 
 `parareq` was created by Matt Gibson. It is licensed under the terms of the MIT license.
 
-## Credits
-
-`parareq` was created with [`cookiecutter`](https://cookiecutter.readthedocs.io/en/latest/) and the `py-pkgs-cookiecutter` [template](https://github.com/py-pkgs/py-pkgs-cookiecutter).
 
 [github-ci]: https://github.com/urbanophile/parareq/actions/workflows/ci.yml/badge.svg?branch=main
 [github-link]: https://github.com/urbanophile/parareq
